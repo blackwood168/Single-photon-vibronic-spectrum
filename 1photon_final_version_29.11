@@ -1,0 +1,93 @@
+#!/usr/bin/env python3
+from matplotlib import pyplot as plt
+from matplotlib import style
+from math import factorial
+import numpy as np
+from scipy.special import genlaguerre
+def MF(n, w, T):
+    return np.exp(-1.438786*w*(n)/T)
+    return 1
+def SumFC(n, j, S):
+    tmp = 0
+    for i in range(min(n, j) + 1):
+        tmp += 1 / factorial(i) / factorial(j - i) / factorial(n - i) * S ** (-i) * (-1) ** i
+    return tmp ** 2
+def FC(n, j, S):
+    if n > j:
+        j, n = n, j
+    tmp = np.sqrt(factorial(n)/factorial(j))*S**((j-n)/2)*np.exp(-S/2)*genlaguerre(n = n, alpha = j-n)(S)
+    return tmp ** 2
+def FC1(n, j, S):
+    tmp = 0
+    for k in range(0, min(n, j) + 1):
+        tmp += (-1) ** k / factorial(k) / factorial(j-k) / factorial(n-k) / S ** k
+    return tmp ** 2 * factorial(n) * factorial(j) * np.exp(-S) * S ** (n+j)
+def FСsumm(n, ex, S, w):
+    tmp = 0
+    for i in range(n):
+        tmp += FC(i, i + ex, S) * MF(i, w, T) * (1 - np.exp(-w*1.438786/T))
+    return tmp
+def FСsummm(n, ex, S, w):
+    tmp = 0
+    for i in range(n):
+        tmp += FC(i + ex, i, S) * MF(i + ex, w, T) * (1 - np.exp(-w*1.438786/T))
+    return tmp
+def gauss(j, i, peak, hwhm):
+    return peak * np.exp(-(j-i)**2/2/sigma2)
+
+#index = x + 10000
+x_array = np.arange(-10000, 10001, 1)
+y1 = np.zeros(len(x_array))
+
+#reading files and properties
+file = open(r'C:\Users\Artur\Downloads\GFP_freq.inp', 'r')
+N_freq = 204
+print('Type temperature (K)')
+T = float(input())
+freqs = [int(float(file.readline())) for i in range(N_freq)]
+file.close()
+file = open(r'C:\Users\Artur\Downloads\GFP_shifts.inp', 'r')
+shifts = [float(file.readline()) for i in range(N_freq)]
+file.close()
+
+#N states
+N_excited = 11  #максимальная кратность возбуждения/девозбуждения - 1
+N_states = 50 #максимально количество исходных уровней
+
+#lets perform FC spectrum
+y_FC = np.copy(y1)
+SummsFC = [ [FСsumm(N_states, i, shifts[freq_i], freqs[freq_i]) for i in range(N_excited)]
+for freq_i in range(len(freqs))]
+SummsmFC = [ [FСsummm(N_states, i, shifts[freq_i], freqs[freq_i]) for i in range(N_excited)]
+for freq_i in range(len(freqs))]
+tmp = 1
+for freq_i in range(len(freqs)):
+    tmp *= SummsFC[freq_i][0]
+y_FC[10000] = tmp
+AT = np.zeros(len(y_FC))
+for freq_i in range(len(freqs)):
+    freq = freqs[freq_i]
+    for excite in range(1, N_excited):
+        if excite*freq > 20001:
+            continue
+        AT[excite*freq:] = AT[excite*freq:] + y_FC[:-excite*freq] / SummsFC[freq_i][0] * SummsFC[freq_i][excite]
+        AT[:20001 - excite*freq] = AT[:20001 - excite*freq] + y_FC[excite*freq:] / SummsmFC[freq_i][0] * SummsmFC[freq_i][excite]
+    y_FC += AT
+    AT = np.zeros(len(y_FC))
+
+
+
+#adding all y
+y1 += y_FC
+sigma2 = 2340.658
+hwhm = int(np.sqrt(2*np.log(2)*sigma2)) + 1     #уширение гауссианом
+W = np.zeros(len(y1))
+for i in range(len(y1)):
+    if y1[i] != 0:
+        W += gauss(np.array(range(len(y1))), i, y1[i], hwhm)
+
+AEE = 22500
+
+x_array_lambda = 1 / (AEE + x_array) * 10**7   # перевод в шкалу нм
+maxi = np.max(W)
+W = W/maxi          #W --- итоговый спектр
